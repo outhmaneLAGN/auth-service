@@ -31,7 +31,3 @@ jwt:
   secret: ${JWT_SECRET:dev-only-default-secret-please-override-me-32-bytes-min-xxxxx}
   access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:900000}
   refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
-
-app:
-  cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
