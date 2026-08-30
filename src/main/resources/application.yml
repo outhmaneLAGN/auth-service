@@ -15,6 +15,13 @@ spring:
       hibernate:
         default_schema: auth
     open-in-view: false
+  flyway:
+    enabled: true
+    schemas: auth
+    default-schema: auth
+    create-schemas: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 management:
   endpoints:
@@ -23,4 +30,10 @@ management:
         include: health,info
 
 jwt:
-  secret: ${JWT_SECRET:change-me-in-env-this-is-a-dev-only-default-secret}
+  secret: ${JWT_SECRET:dev-only-default-secret-please-override-me-32-bytes-min-xxxxx}
+  access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:900000}
+  refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
