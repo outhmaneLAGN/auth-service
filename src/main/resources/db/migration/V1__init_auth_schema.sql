@@ -1,36 +1,38 @@
 CREATE TABLE IF NOT EXISTS roles (
-    id   BIGSERIAL PRIMARY KEY,
+    id   BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(30) NOT NULL UNIQUE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS users (
-    id         BIGSERIAL PRIMARY KEY,
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     username   VARCHAR(50)  NOT NULL UNIQUE,
     email      VARCHAR(150) NOT NULL UNIQUE,
     password   VARCHAR(255) NOT NULL,
     cin        VARCHAR(20)  UNIQUE,
     enabled    BOOLEAN      NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP    NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP    NOT NULL DEFAULT now()
-);
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS user_roles (
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    PRIMARY KEY (user_id, role_id)
-);
+    user_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    PRIMARY KEY (user_id, role_id),
+    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id         BIGSERIAL PRIMARY KEY,
-    user_id    BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT       NOT NULL,
     token_hash VARCHAR(255) NOT NULL UNIQUE,
-    expires_at TIMESTAMP    NOT NULL,
+    expires_at DATETIME     NOT NULL,
     revoked    BOOLEAN      NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP    NOT NULL DEFAULT now()
-);
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_users_email ON users(email);
 
-INSERT INTO roles (name) VALUES ('ADMIN'), ('AGENT'), ('RESPONSABLE'), ('CLIENT')
-    ON CONFLICT (name) DO NOTHING;
+INSERT IGNORE INTO roles (name) VALUES ('ADMIN'), ('AGENT'), ('RESPONSABLE'), ('CLIENT');
