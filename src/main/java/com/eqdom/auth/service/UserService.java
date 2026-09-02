@@ -15,6 +15,7 @@ import com.eqdom.auth.entity.Role;
 import com.eqdom.auth.entity.RoleName;
 import com.eqdom.auth.entity.User;
 import com.eqdom.auth.exception.DuplicateResourceException;
+import com.eqdom.auth.exception.InvalidRequestException;
 import com.eqdom.auth.exception.ResourceNotFoundException;
 import com.eqdom.auth.mapper.UserMapper;
 import com.eqdom.auth.repository.RoleRepository;
@@ -68,6 +69,11 @@ public class UserService {
     @Transactional
     public UserResponse updateRoles(Long id, Set<RoleName> roleNames) {
         User user = findUserOrThrow(id);
+        boolean isCurrentlyAdmin = user.isEnabled() && hasRole(user, RoleName.ADMIN);
+        boolean willRemainAdmin = roleNames.contains(RoleName.ADMIN);
+        if (isCurrentlyAdmin && !willRemainAdmin) {
+            requireNotLastAdmin();
+        }
         user.setRoles(resolveRoles(roleNames));
         return userMapper.toResponse(userRepository.save(user));
     }
@@ -75,8 +81,22 @@ public class UserService {
     @Transactional
     public UserResponse updateStatus(Long id, boolean enabled) {
         User user = findUserOrThrow(id);
+        boolean isCurrentlyEnabledAdmin = user.isEnabled() && hasRole(user, RoleName.ADMIN);
+        if (!enabled && isCurrentlyEnabledAdmin) {
+            requireNotLastAdmin();
+        }
         user.setEnabled(enabled);
         return userMapper.toResponse(userRepository.save(user));
+    }
+
+    private void requireNotLastAdmin() {
+        if (userRepository.countByEnabledTrueAndRoles_Name(RoleName.ADMIN) <= 1) {
+            throw new InvalidRequestException("Cannot remove the last administrator account.");
+        }
+    }
+
+    private boolean hasRole(User user, RoleName roleName) {
+        return user.getRoles().stream().anyMatch(role -> role.getName() == roleName);
     }
 
     private User findUserOrThrow(Long id) {

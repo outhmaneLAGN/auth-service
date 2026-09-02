@@ -30,6 +30,6 @@ public class RegisterRequest {
     @Size(min = 8, max = 100)
     private String password;
 
-    @Pattern(regexp = "^[A-Za-z0-9]{1,20}$", message = "CIN must be alphanumeric")
+    @Pattern(regexp = "^[A-Za-z]{1,2}[0-9]{1,7}$", message = "CIN must be 1-2 letters followed by 1-7 digits")
     private String cin;
 }

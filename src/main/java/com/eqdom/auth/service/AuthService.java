@@ -34,6 +34,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
+    private static final long LOCKOUT_MINUTES = 15;
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -72,17 +75,46 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        User user = userRepository.findByUsernameOrEmail(request.getUsernameOrEmail(), request.getUsernameOrEmail())
+                .orElse(null);
+
+        if (user != null && user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {
+            throw new InvalidCredentialsException(
+                    "Account temporarily locked due to too many failed attempts. Try again later.");
+        }
+
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getUsernameOrEmail(), request.getPassword()));
         } catch (BadCredentialsException ex) {
+            if (user != null) {
+                registerFailedLogin(user);
+            }
             throw new InvalidCredentialsException("Invalid username/email or password");
         }
 
-        User user = userRepository.findByUsernameOrEmail(request.getUsernameOrEmail(), request.getUsernameOrEmail())
-                .orElseThrow(() -> new InvalidCredentialsException("Invalid username/email or password"));
+        if (user == null) {
+            throw new InvalidCredentialsException("Invalid username/email or password");
+        }
+
+        if (user.getFailedLoginAttempts() != 0 || user.getLockedUntil() != null) {
+            user.setFailedLoginAttempts(0);
+            user.setLockedUntil(null);
+            user = userRepository.save(user);
+        }
 
         return issueTokens(user);
+    }
+
+    private void registerFailedLogin(User user) {
+        int attempts = user.getFailedLoginAttempts() + 1;
+        if (attempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
+            user.setFailedLoginAttempts(0);
+            user.setLockedUntil(LocalDateTime.now().plusMinutes(LOCKOUT_MINUTES));
+        } else {
+            user.setFailedLoginAttempts(attempts);
+        }
+        userRepository.save(user);
     }
 
     @Transactional
@@ -91,7 +123,14 @@ public class AuthService {
         RefreshToken existing = refreshTokenRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new InvalidTokenException("Invalid refresh token"));
 
-        if (existing.isRevoked() || existing.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (existing.isRevoked()) {
+            // A previously revoked refresh token being presented again is the classic signal of
+            // token theft/replay. Kill the whole session family, not just this one request.
+            refreshTokenRepository.findByUserAndRevokedFalse(existing.getUser())
+                    .forEach(token -> token.setRevoked(true));
+            throw new InvalidTokenException("Refresh token expired or revoked");
+        }
+        if (existing.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new InvalidTokenException("Refresh token expired or revoked");
         }
 
